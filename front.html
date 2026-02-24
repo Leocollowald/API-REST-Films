@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>API Films</title>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #fff; padding: 20px; }
+    h1 { text-align: center; }
+
+    /* Barre de contrôles */
+    .controls { display: flex; gap: 10px; justify-content: center; margin: 20px 0; flex-wrap: wrap; }
+    select, input, button {
+      padding: 8px 12px; border-radius: 6px; border: none;
+      font-size: 14px; cursor: pointer;
+    }
+    input { background: #222; color: #fff; width: 200px; }
+    button { background: #e50914; color: #fff; }
+    button:hover { background: #b0070f; }
+
+    /* Grille de films */
+    .grid { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; }
+    .card {
+      background: #222; border-radius: 8px; width: 150px;
+      text-align: center; overflow: hidden;
+    }
+    .card img { width: 100%; display: block; }
+    .card .info { padding: 8px; }
+    .card .title { font-size: 13px; margin-bottom: 6px; }
+    .card .fav-btn {
+      background: #333; color: #fff; border: none; border-radius: 4px;
+      padding: 4px 8px; font-size: 12px; cursor: pointer; width: 100%;
+    }
+    .card .fav-btn:hover { background: #e50914; }
+
+    /* Section favoris */
+    #fav-section { margin-top: 40px; }
+    #fav-section h2 { text-align: center; }
+    .fav-item {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #222; padding: 8px 12px; border-radius: 6px; margin: 6px auto; max-width: 400px;
+    }
+    .fav-item button { background: #555; color: #fff; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+    .fav-item button:hover { background: #e50914; }
+
+    #message { text-align: center; color: #aaa; margin: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>🎬 API Films</h1>
+
+  <!-- Contrôles -->
+  <div class="controls">
+    <select id="type-select">
+      <option value="popular">Populaires</option>
+      <option value="top_rated">Les mieux notés</option>
+      <option value="upcoming">À venir</option>
+      <option value="now_playing">En salle</option>
+    </select>
+    <button onclick="loadMovies()">Charger</button>
+    <input type="text" id="search-input" placeholder="Rechercher un film...">
+    <button onclick="searchMovies()">Rechercher</button>
+  </div>
+
+  <div id="message">Clique sur "Charger" pour voir les films.</div>
+
+  <!-- Grille des films -->
+  <div class="grid" id="movies-grid"></div>
+
+  <!-- Favoris -->
+  <div id="fav-section">
+    <h2>Mes favoris</h2>
+    <div id="fav-list"></div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:8000';
+    const IMG = 'https://image.tmdb.org/t/p/w200';
+
+    // Charge une liste de films selon le type sélectionné
+    async function loadMovies() {
+      const type = document.getElementById('type-select').value;
+      const res = await fetch(`${API}/movies?type=${type}`);
+      const data = await res.json();
+      displayMovies(data.results || []);
+    }
+
+    // Recherche des films par titre
+    async function searchMovies() {
+      const query = document.getElementById('search-input').value;
+      if (!query) return;
+      const res = await fetch(`${API}/movies/search?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      displayMovies(data.results || []);
+    }
+
+    // Affiche les films dans la grille
+    function displayMovies(movies) {
+      const grid = document.getElementById('movies-grid');
+      document.getElementById('message').textContent = `${movies.length} film(s) trouvé(s)`;
+      grid.innerHTML = '';
+
+      movies.forEach(movie => {
+        const poster = movie.poster_path
+          ? `<img src="${IMG}${movie.poster_path}" alt="${movie.title}">`
+          : `<div style="height:225px;background:#333;line-height:225px">Pas d'image</div>`;
+
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          ${poster}
+          <div class="info">
+            <div class="title">${movie.title}</div>
+            <button class="fav-btn" onclick="addFavorite(${movie.id}, '${movie.title.replace(/'/g, "\\'")}', '${movie.poster_path || ''}')">
+              + Favori
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Ajoute un film aux favoris
+    async function addFavorite(id, title, poster_path) {
+      const res = await fetch(`${API}/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, title, poster_path })
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+      loadFavorites();
+    }
+
+    // Supprime un favori
+    async function removeFavorite(id) {
+      await fetch(`${API}/favorites/${id}`, { method: 'DELETE' });
+      loadFavorites();
+    }
+
+    // Charge et affiche les favoris
+    async function loadFavorites() {
+      const res = await fetch(`${API}/favorites`);
+      const favorites = await res.json();
+      const list = document.getElementById('fav-list');
+
+      if (favorites.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:#aaa">Aucun favori.</p>';
+        return;
+      }
+
+      list.innerHTML = '';
+      favorites.forEach(fav => {
+        const item = document.createElement('div');
+        item.className = 'fav-item';
+        item.innerHTML = `
+          <span>${fav.title}</span>
+          <button onclick="removeFavorite(${fav.id})">Supprimer</button>
+        `;
+        list.appendChild(item);
+      });
+    }
+
+    // Charge les favoris au démarrage
+    loadFavorites();
+  </script>
+
+</body>
+</html>
